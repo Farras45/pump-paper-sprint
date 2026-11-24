@@ -1,9 +1,9 @@
 // Pump Paper Sprint Bot — early-launch scalper for the pump.fun replay sprint.
 //
-// Lesson from grading the first version on the kit's dev window: chasing a
-// coin after it has already risen 15% and then waiting for +50% loses money
-// — most such coins dump, and the -35% stop is too deep. This version buys
-// near the open instead and exits fast and tight.
+// Buy near the open and exit fast and tight: chasing a coin after it has
+// already run up loses money — most such coins dump, and a deep stop lets
+// the loss grow. This version only enters while a coin is still young and
+// close to its opening price, then exits at the first sign of trouble.
 //
 // Entry, per coin, from its CreateEvent:
 //   - buy only while it is young (at most 20 slots after creation);
@@ -14,12 +14,19 @@
 //     reserves, so below 1 SOL a buy cannot reach the 0.01 SOL round-trip
 //     floor), and the price within -5%..+10% of its opening price —
 //     near the open, not after a run-up.
-// Exit: sell the whole position at +15% (take profit) or -12% (stop loss),
-// or after 1000 slots if it is still below its buy cost (stale). A coin
+// Exit: sell the whole position at +10% (take profit) or -10% (stop loss),
+// or after 500 slots if it is still below its buy cost (stale). A coin
 // bought and sold is never bought twice — the guardrail counts distinct
 // coins, so turnover across new coins earns the 20-coin minimum. A buy the
 // market rejects or that fails does not burn the coin: the mint is released
 // so a later batch can try again while it is still young.
+//
+// Bounded state: coins that can no longer be bought (older than 20 slots
+// with no open position) and bought mints older than 20 slots are pruned
+// at the end of each batch. Pruning cannot change any decision — a coin
+// older than 20 slots already fails the age check, and a pruned bought
+// mint is either too old to buy again or already blocked by the open
+// position check. This keeps memory and GC small on long replays.
 //
 // Fully deterministic: every decision comes from the harness state (slot,
 // reserves, fills, account, and the events' own fields). No clock, no
@@ -177,6 +184,26 @@ await runBot({
       free -= amount + txFee;
       slots -= 1;
     }
+
+    // Prune state that can no longer affect any decision, so the maps stay
+    // bounded on long replays. A coin older than MAX_AGE_SLOTS with no open
+    // position can never be bought again (the age check would reject it),
+    // and its CompleteEvent can no longer matter either (a completed curve
+    // is already unbuyable). A bought mint is pruned once its coin is gone
+    // or it is older than MAX_AGE_SLOTS — the age check would reject a
+    // re-buy, and an open position blocks one anyway.
+    for (const [mint, info] of coins) {
+      if (batch.slot - info.createSlot > MAX_AGE_SLOTS && !state.positions.has(mint)) {
+        coins.delete(mint);
+      }
+    }
+    for (const mint of boughtMints) {
+      const info = coins.get(mint);
+      if (info === undefined || batch.slot - info.createSlot > MAX_AGE_SLOTS) {
+        boughtMints.delete(mint);
+      }
+    }
+
     return orders;
   },
 });
