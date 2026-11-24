@@ -192,17 +192,20 @@ await runBot({
     // is already unbuyable). A bought mint is pruned once its coin is gone
     // or it is older than MAX_AGE_SLOTS — the age check would reject a
     // re-buy, and an open position blocks one anyway.
-    for (const [mint, info] of coins) {
-      if (batch.slot - info.createSlot > MAX_AGE_SLOTS && !state.positions.has(mint)) {
-        coins.delete(mint);
+    function pruneStaleCoins(batchSlot: number): void {
+      for (const [mint, info] of coins) {
+        if (batchSlot - info.createSlot > MAX_AGE_SLOTS && !state.positions.has(mint)) {
+          coins.delete(mint);
+        }
+      }
+      for (const mint of boughtMints) {
+        const info = coins.get(mint);
+        if (info === undefined || batchSlot - info.createSlot > MAX_AGE_SLOTS) {
+          boughtMints.delete(mint);
+        }
       }
     }
-    for (const mint of boughtMints) {
-      const info = coins.get(mint);
-      if (info === undefined || batch.slot - info.createSlot > MAX_AGE_SLOTS) {
-        boughtMints.delete(mint);
-      }
-    }
+    pruneStaleCoins(batch.slot);
 
     return orders;
   },
