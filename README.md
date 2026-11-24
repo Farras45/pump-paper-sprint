@@ -4,14 +4,14 @@
 [![rank](https://make.fun/badge/u-boothlord-pump-fun-paper-sprint-any-bot-can-f83c389b/farras45/pump-paper-sprint/rank.svg)](https://make.fun/bounty/u-boothlord-pump-fun-paper-sprint-any-bot-can-f83c389b/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=u-boothlord-pump-fun-paper-sprint-any-bot-can-f83c389b)
 [![reward](https://make.fun/badge/u-boothlord-pump-fun-paper-sprint-any-bot-can-f83c389b/farras45/pump-paper-sprint/reward.svg)](https://make.fun/bounty/u-boothlord-pump-fun-paper-sprint-any-bot-can-f83c389b?utm_source=github&utm_medium=readme&utm_campaign=u-boothlord-pump-fun-paper-sprint-any-bot-can-f83c389b)
 
-A paper-trading bot for the pump.fun replay sprint. It buys newly created bonding curves while they are still near their opening price and exits quickly at +10% take profit or −10% stop loss.
+A paper bot that plays the pump.fun replay sprint by scalping launches in their first few slots. It steps in only while a fresh curve still trades near its opening price, then gets out at the first sign the trade has gone wrong — or right.
 
-## Strategy
+## How it trades
 
-- **Early-launch scalper:** buys only within 20 slots of a coin's creation, with 1–5 distinct non-creator buyers, the creator not yet sold, real reserves of at least 1 SOL, and the price within −5%..+10% of the opening price.
-- **Fixed size:** 0.02 SOL per coin, at most 5 open positions, sells before new buys.
-- **Fast exits:** take profit +10%, stop loss −10%, or stale after 500 slots below cost. A coin bought and sold is never bought again.
-- **Fully deterministic:** every decision comes from the harness state — no clock, no environment, no randomness.
+- **Buy the open, not the pump:** a coin is eligible for at most 20 slots after creation, with 1–5 distinct buyers besides the creator, no creator sale yet, at least 1 SOL of real reserves behind it, and a price still sitting between −5% and +10% of where it opened.
+- **Small and capped:** 0.02 SOL per coin, no more than 5 positions open at once, and exits are always decided before new entries so a sale can free a slot in the same batch.
+- **Out fast, either way:** the whole position goes at +10% profit or −10% loss, or after 500 slots stuck below cost. A coin that has been bought is never bought again — fresh coins are what keep the count up.
+- **Nothing left to chance:** every order follows from the harness state alone. No clock, no environment, no random numbers, so the same replay always gives the same orders.
 
 ## Run it
 
