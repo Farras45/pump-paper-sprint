@@ -32,7 +32,7 @@
 // slot, reserves, fills, account, and the events themselves — so replaying
 // the same data always produces the same orders.
 
-import { runBot, type Batch, type BotState, type BuyInput, type SellInput } from './vendor/makefun-bot.ts';
+import { runBot, type Batch, type BotState, type BuyInput, type Curve, type SellInput } from './vendor/makefun-bot.ts';
 
 // --- sizing and timing, all in lamports / slots / basis points -----------
 
@@ -177,6 +177,21 @@ function planExits(desk: Desk): void {
   }
 }
 
+// Every eligibility gate for a fresh launch, checked in order: age,
+// early activity, creator behaviour, curve health, and the price band
+// around the open. Pure — no state reads, no side effects — so the
+// entry sweep asks one question instead of nine.
+function buyable(launch: Launch, curve: Curve | undefined, slot: number): boolean {
+  if (slot - launch.bornAt > FRESH_WINDOW) return false;
+  if (launch.tradeCount < 1) return false;
+  if (launch.wallets.size > BUYER_LIMIT) return false;
+  if (launch.makerHasSold) return false;
+  if (curve === undefined || curve.complete) return false;
+  if (curve.real_quote_reserves < RESERVE_FLOOR) return false;
+  if (launch.tokensAtOpen === 0n || curve.virtual_token_reserves === 0n) return false;
+  return stillNearOpen(curve.virtual_quote_reserves, curve.virtual_token_reserves, launch);
+}
+
 // Entries: a single sweep over this batch's events, at most one buy per
 // mint. Every gate is checked in turn; a mint that fails any of them is
 // simply skipped, with no side effects, so the sweep stays pure until
@@ -192,15 +207,8 @@ function planEntries(desk: Desk): void {
     if (state.positions.has(mint)) continue;
     const launch = launches.get(mint);
     if (launch === undefined) continue;
-    if (batch.slot - launch.bornAt > FRESH_WINDOW) continue;
-    if (launch.tradeCount < 1) continue;
-    if (launch.wallets.size > BUYER_LIMIT) continue;
-    if (launch.makerHasSold) continue;
     const curve = state.curves.get(mint);
-    if (curve === undefined || curve.complete) continue;
-    if (curve.real_quote_reserves < RESERVE_FLOOR) continue;
-    if (launch.tokensAtOpen === 0n || curve.virtual_token_reserves === 0n) continue;
-    if (!stillNearOpen(curve.virtual_quote_reserves, curve.virtual_token_reserves, launch)) continue;
+    if (!buyable(launch, curve, batch.slot)) continue;
     const cap = state.maxBuyLamports(mint);
     if (cap < ROUND_TRIP_FLOOR) continue;
     const size = cap < ORDER_SIZE ? cap : ORDER_SIZE;
